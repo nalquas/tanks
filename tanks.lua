@@ -1,0 +1,949 @@
+-- title:  Tanks
+-- author: nickifr
+-- desc:   A 2-player PvP arcade game about tanks.
+-- script: lua
+-- input:  gamepad
+-- saveid: TIC_Tanks
+
+
+
+
+
+-- ============LICENSE=============
+-- Tanks - A 2-player PvP arcade game about tanks.
+-- Copyright (C) 2017  Niklas 'nickifr' Freund
+--
+-- This program is free software: you can redistribute it and/or modify
+-- it under the terms of the GNU General Public License as published by
+-- the Free Software Foundation, either version 3 of the License, or
+-- (at your option) any later version.
+--
+-- This program is distributed in the hope that it will be useful,
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-- GNU General Public License for more details.
+--
+-- You should have received a copy of the GNU General Public License
+-- along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-- =========END OF LICENSE=========
+
+
+
+
+
+-- Permanent Variables
+versionNr="1.0.1"
+releaseDate="31.08.2017"
+scoreGoal=10
+soundOn=true
+musicOn=true
+playerSpeed=0.5 -- Pixels per Step
+shotSpeed=1.5
+timeBetweenDirChanges=15 -- Time in Steps
+timeBetweenShots=30
+destructSpeed=10
+maxDestructStep=3
+maxMapIndex=4 -- Game supports up to 8 maps (max index is 7)
+maxGameOverTime=180
+mapData={}
+mapData[0]={base=0,collisionBase=11,shotCollisionBase=13,background=5,textColor=15}
+mapData[1]={base=32,collisionBase=42,shotCollisionBase=42,background=14,textColor=0}
+mapData[2]={base=0,collisionBase=11,shotCollisionBase=13,background=5,textColor=15}
+mapData[3]={base=64,collisionBase=79,shotCollisionBase=82,background=15,textColor=0}
+mapData[4]={base=96,collisionBase=111,shotCollisionBase=113,background=4,textColor=15}
+
+-- Changing Variables
+t=0
+t_menu=0
+t_menuClick=0
+t_gameOver=0
+gameOverSwitch=false
+
+gameOver=false
+mode=0
+mode_menu=0
+selectActive=false
+gameMap={index=pmem(0),maxIndex=maxMapIndex,x=0,y=0}
+players={}
+players[1]={alive=true,score=0,sprite=273,spriteChangeDir=0,spriteChange=0,x=8,y=67,direction=2,speed=0,t_dirChange=timeBetweenDirChanges/2,tShot=0,destructStep=0,tDestruct=0}
+players[2]={alive=true,score=0,sprite=321,spriteChangeDir=0,spriteChange=0,x=224,y=67,direction=6,speed=0,t_dirChange=timeBetweenDirChanges/2,tShot=0,destructStep=0,tDestruct=0}
+
+shots={}
+
+-- Message in Console:
+trace("\n\n-----------------------------\n      nickifr presents:\n        Tanks V"..versionNr.."\n  Last updated: "..releaseDate.."\nhttps://nickifr.itch.io/tanks\n-----------------------------\n")
+
+function Background(bgrValue)
+ poke(0x03FF8, bgrValue) -- Set Background
+end
+
+function printCenter(text,x,y,color,fixed,scale)
+ -- Leave scale at 1
+	local width=print(text,0,-12)
+	print(text,(((x*2)-width)//2)+1,y,color,fixed,scale)
+end
+
+function MakeShot(player,x,y,direction,alive)
+ if alive==nil then alive=true end
+	--sprite=0
+	spdX=0
+	spdY=0
+	if direction==0 then
+	 --sprite=304
+	 spdY=-shotSpeed
+	elseif direction==1 then
+	 --sprite=320
+	 spdY=(((-shotSpeed)/3)*2)
+		spdX=(((shotSpeed)/3)*2)
+	elseif direction==2 then
+	 --sprite=272
+	 spdX=shotSpeed
+	elseif direction==3 then
+	 --sprite=288
+	 spdY=(((shotSpeed)/3)*2)
+		spdX=(((shotSpeed)/3)*2)
+	elseif direction==4 then
+	 --sprite=304
+	 spdY=shotSpeed
+	elseif direction==5 then
+	 --sprite=320
+	 spdY=(((shotSpeed)/3)*2)
+		spdX=(((-shotSpeed)/3)*2)
+	elseif direction==6 then
+	 --sprite=272
+	 spdX=-shotSpeed
+	elseif direction==7 then
+	 --sprite=288
+	 spdY=(((-shotSpeed)/3)*2)
+		spdX=(((-shotSpeed)/3)*2)
+	else
+	 trace("ERROR in MakeShot() - Invalid direction")
+	end
+	
+	return {alive=alive,player=player,x=x,y=y,spdX=spdX,spdY=spdY}
+end
+
+function ResetPlayerSoft(playerNr)
+ if playerNr==1 then
+	 players[1]={alive=true,score=players[1].score,sprite=273,spriteChangeDir=0,spriteChange=0,x=8,y=67,direction=2,speed=0,t_dirChange=timeBetweenDirChanges/2,tShot=0,destructStep=0,tDestruct=0}
+	else
+	 players[2]={alive=true,score=players[2].score,sprite=321,spriteChangeDir=0,spriteChange=0,x=224,y=67,direction=6,speed=0,t_dirChange=timeBetweenDirChanges/2,tShot=0,destructStep=0,tDestruct=0}
+	end
+end
+
+function init()
+ music()
+	shots[0]=MakeShot(1,0,0,0,false)
+end
+
+init()
+
+function ResetHard()
+ t=0
+	t_menu=0
+	t_menuClick=0
+	t_gameOver=0
+	gameOverSwitch=false
+	
+	gameOver=false
+	mode=0
+	mode_menu=0
+	selectActive=false
+	gameMap={index=pmem(0),maxIndex=maxMapIndex,x=0,y=0}
+	players={}
+	players[1]={alive=true,score=0,sprite=273,spriteChangeDir=0,spriteChange=0,x=8,y=67,direction=2,speed=0,t_dirChange=timeBetweenDirChanges/2,tShot=0,destructStep=0,tDestruct=0}
+	players[2]={alive=true,score=0,sprite=321,spriteChangeDir=0,spriteChange=0,x=224,y=67,direction=6,speed=0,t_dirChange=timeBetweenDirChanges/2,tShot=0,destructStep=0,tDestruct=0}
+	
+	shots={}
+	
+	init()
+end
+
+function TIC()
+ if mode==0 then
+	
+		-- INPUT SECTION
+		if t_menuClick>15 then
+		 if btn(0) then
+			 mode_menu=mode_menu-1
+				t_menuClick=0
+			elseif btn(1) then
+			 mode_menu=mode_menu+1
+				t_menuClick=0
+			else
+			 if mode_menu==0 then
+				 if t_menu>20 and (btn(2) or btn(3) or btn(4) or btn(5) or btn(6) or btn(7)) then
+			   if musicOn then
+						 music(0)
+						end
+						mode=1
+						t_menuClick=0
+						pmem(0,gameMap.index)
+			  end
+				elseif mode_menu==1 then
+					-- Set Map Index
+					if btn(2) then
+					 gameMap.index=gameMap.index-1
+						t_menuClick=0
+					elseif (btn(3) or btn(4) or btn(5) or btn(6) or btn(7)) then
+					 gameMap.index=gameMap.index+1
+						t_menuClick=0
+					end
+				elseif mode_menu==2 then
+				 -- Set ScoreGoal
+				 if btn(2) then
+					 scoreGoal=scoreGoal-1
+						t_menuClick=0
+					elseif btn(3) then
+					 scoreGoal=scoreGoal+1
+						t_menuClick=0
+					end
+				elseif mode_menu==3 then
+				 if t_menu>20 and (btn(2) or btn(3) or btn(4) or btn(5) or btn(6) or btn(7)) then
+			   mode=2
+						t_menuClick=0
+			  end
+				end
+			end
+			
+			-- Sanity Checks
+			if mode_menu<0 then
+			 mode_menu=0
+			elseif mode_menu>3 then
+			 mode_menu=3
+			end
+		end
+		
+		-- Sanity Checks
+		if gameMap.index>gameMap.maxIndex then
+		 gameMap.index=0
+		elseif gameMap.index<0 then
+		 gameMap.index=gameMap.maxIndex
+		end
+		
+		gameMap.x=gameMap.index*30
+		gameMap.y=0 -- Due to change!
+		
+		if scoreGoal < 1 then
+		 scoreGoal=1
+		end
+		
+		-- RENDER SECTION
+		Background(mapData[gameMap.index].background)
+		cls(mapData[gameMap.index].background)
+		map(gameMap.x,gameMap.y,30,17,0,0,-1,1,nil)
+		
+		rect(75,56,91,37,4)
+		rectb(74,55,93,39,1)
+		
+		spr(448,83,28,0,1,0,0,10,4)
+		--print("TANKS", 92, 32, mapData[gameMap.index].textColor, false, 2)
+		printCenter("Copyright (C) 2017", 120, 113, mapData[gameMap.index].textColor, false, 1)
+		printCenter("Niklas 'nickifr' Freund", 120, 120, mapData[gameMap.index].textColor, false, 1)
+		printCenter("GNU General Public License Version 3", 120, 127, mapData[gameMap.index].textColor, false, 1)
+		print("V"..versionNr, 4, 4, mapData[gameMap.index].textColor, false, 1)
+		
+		if t_menu%10==0 then selectActive=(not selectActive) end
+		selectColor=nil
+		if selectActive then
+		 selectColor=6
+		else
+		 selectColor=15
+		end
+		if mode_menu==0 then
+		 printCenter("Start the Game", 120, 60, selectColor, false, 1)
+ 		printCenter("Select a Map ("..(gameMap.index+1)..")", 120, 68, 15, false, 1)
+			printCenter("Score to win: "..scoreGoal, 120, 76, 15, false, 1)
+			printCenter("Exit to TIC-80", 120, 84, 15, false, 1)
+		elseif mode_menu==1 then
+		 printCenter("Start the Game", 120, 60, 15, false, 1)
+ 		printCenter("Select a Map ("..(gameMap.index+1)..")", 120, 68, selectColor, false, 1)
+			printCenter("Score to win: "..scoreGoal, 120, 76, 15, false, 1)
+			printCenter("Exit to TIC-80", 120, 84, 15, false, 1)
+		elseif mode_menu==2 then
+		 printCenter("Start the Game", 120, 60, 15, false, 1)
+ 		printCenter("Select a Map ("..(gameMap.index+1)..")", 120, 68, 15, false, 1)
+			printCenter("Score to win: "..scoreGoal, 120, 76, selectColor, false, 1)
+			printCenter("Exit to TIC-80", 120, 84, 15, false, 1)
+		elseif mode_menu==3 then
+		 printCenter("Start the Game", 120, 60, 15, false, 1)
+ 		printCenter("Select a Map ("..(gameMap.index+1)..")", 120, 68, 15, false, 1)
+			printCenter("Score to win: "..scoreGoal, 120, 76, 15, false, 1)
+			printCenter("Exit to TIC-80", 120, 84, selectColor, false, 1)
+		end
+		
+		-- TIME STEP INCREMENTING
+		t_menu=t_menu+1
+		t_menuClick=t_menuClick+1
+		
+		
+		
+		
+		
+	elseif mode==1 then
+	 if not(gameOver) then
+			-- PLAYER INPUT
+			for playerNr=1,2 do
+			 if players[playerNr].alive then
+				 -- Speed
+				 players[playerNr].speed=0
+				 if btn(0+((playerNr-1)*8)) then players[playerNr].speed=playerSpeed end
+				 if btn(1+((playerNr-1)*8)) then players[playerNr].speed=-playerSpeed end
+				 
+					-- Direction
+					if players[playerNr].t_dirChange>timeBetweenDirChanges then
+						if btn(2+((playerNr-1)*8)) then players[playerNr].direction=players[playerNr].direction-1 end
+					 if btn(3+((playerNr-1)*8)) then players[playerNr].direction=players[playerNr].direction+1 end
+						if players[playerNr].direction>7 then
+						 players[playerNr].direction=0
+						elseif players[playerNr].direction<0 then
+						 players[playerNr].direction=7
+						end
+						players[playerNr].t_dirChange=0
+					end
+					
+					-- Shots
+					if (btn(4+((playerNr-1)*8)) or btn(5+((playerNr-1)*8)) or btn(6+((playerNr-1)*8)) or btn(7+((playerNr-1)*8))) and (players[playerNr].tShot>timeBetweenShots) then
+					 shots[#shots+1]=MakeShot(playerNr,players[playerNr].x+3,players[playerNr].y+3,players[playerNr].direction)
+					 players[playerNr].tShot=0
+						if soundOn then
+						 sfx(5,"C#3",32,0,15,1)
+						end
+					end
+				end
+		 end
+			
+			-- Do Engine Noise
+			if players[1].alive and players[2].alive then
+			 if (players[1].speed>0) or (players[2].speed>0) then
+				 -- Will proabably interfere with the music's drums
+					-- (which is why i disabled the drums)
+					if soundOn then
+					 sfx(4,"D-2",2,3,7,0)
+					end
+				end
+			end
+			
+			-- PLAYER LOGIC
+			for playerNr=1,2 do
+			 if players[playerNr].alive then
+				 -- Animation of Chains
+				 if (not (players[playerNr].speed==0)) and (t%5==0) then
+					 players[playerNr].spriteChange=players[playerNr].spriteChange+3
+						if players[playerNr].spriteChange>3 then
+						 players[playerNr].spriteChange=0
+						end
+					end
+					
+					-- Handle Player Direction
+					if players[playerNr].direction==0 then
+					 players[playerNr].spriteChangeDir=-15
+					elseif players[playerNr].direction==1 then
+					 players[playerNr].spriteChangeDir=-14
+					elseif players[playerNr].direction==2 then
+					 players[playerNr].spriteChangeDir=2
+					elseif players[playerNr].direction==3 then
+					 players[playerNr].spriteChangeDir=18
+					elseif players[playerNr].direction==4 then
+					 players[playerNr].spriteChangeDir=17
+					elseif players[playerNr].direction==5 then
+					 players[playerNr].spriteChangeDir=16
+					elseif players[playerNr].direction==6 then
+					 players[playerNr].spriteChangeDir=0
+					else
+					 players[playerNr].spriteChangeDir=-16
+					end
+					
+					-- Handle Player Movement
+					if (not (players[playerNr].speed==0)) then
+						if players[playerNr].direction==0 then
+						 players[playerNr].y=players[playerNr].y-players[playerNr].speed
+						elseif players[playerNr].direction==1 then
+						 players[playerNr].y=players[playerNr].y-(players[playerNr].speed/3*2)
+							players[playerNr].x=players[playerNr].x+(players[playerNr].speed/3*2)
+						elseif players[playerNr].direction==2 then
+						 players[playerNr].x=players[playerNr].x+players[playerNr].speed
+						elseif players[playerNr].direction==3 then
+						 players[playerNr].y=players[playerNr].y+(players[playerNr].speed/3*2)
+							players[playerNr].x=players[playerNr].x+(players[playerNr].speed/3*2)
+						elseif players[playerNr].direction==4 then
+						 players[playerNr].y=players[playerNr].y+players[playerNr].speed
+						elseif players[playerNr].direction==5 then
+						 players[playerNr].y=players[playerNr].y+(players[playerNr].speed/3*2)
+							players[playerNr].x=players[playerNr].x-(players[playerNr].speed/3*2)
+						elseif players[playerNr].direction==6 then
+						 players[playerNr].x=players[playerNr].x-players[playerNr].speed
+						else
+						 players[playerNr].y=players[playerNr].y-(players[playerNr].speed/3*2)
+							players[playerNr].x=players[playerNr].x-(players[playerNr].speed/3*2)
+						end
+					end
+					
+					wallDetectionActive=true
+					myBase=mapData[gameMap.index].collisionBase-1
+					while wallDetectionActive do
+						-- Make sure player can't drive through obstacles
+						if mget(((players[playerNr].x)/8)+(gameMap.x),((players[playerNr].y+3)/8)+(gameMap.y))>myBase then
+						 players[playerNr].x=players[playerNr].x+1
+						elseif mget(((players[playerNr].x+7)/8)+(gameMap.x),((players[playerNr].y+3)/8)+(gameMap.y))>myBase then
+						 players[playerNr].x=players[playerNr].x-1
+						elseif mget(((players[playerNr].x+3)/8)+(gameMap.x),((players[playerNr].y)/8)+(gameMap.y))>myBase then
+						 players[playerNr].y=players[playerNr].y+1
+						elseif mget(((players[playerNr].x+3)/8)+(gameMap.x),((players[playerNr].y+7)/8)+(gameMap.y))>myBase then
+						 players[playerNr].y=players[playerNr].y-1
+						elseif mget(((players[playerNr].x)/8)+(gameMap.x),((players[playerNr].y)/8)+(gameMap.y))>myBase then
+						 players[playerNr].x=players[playerNr].x+1
+						 players[playerNr].y=players[playerNr].y+1
+						elseif mget(((players[playerNr].x+7)/8)+(gameMap.x),((players[playerNr].y)/8)+(gameMap.y))>myBase then
+						 players[playerNr].x=players[playerNr].x-1
+						 players[playerNr].y=players[playerNr].y+1
+						elseif mget(((players[playerNr].x)/8)+(gameMap.x),((players[playerNr].y+7)/8)+(gameMap.y))>myBase then
+						 players[playerNr].x=players[playerNr].x+1
+						 players[playerNr].y=players[playerNr].y-1
+						elseif mget(((players[playerNr].x+7)/8)+(gameMap.x),((players[playerNr].y+7)/8)+(gameMap.y))>myBase then
+						 players[playerNr].x=players[playerNr].x-1
+						 players[playerNr].y=players[playerNr].y-1
+						else
+						 wallDetectionActive=false
+						end
+					end
+					
+					-- Make sure player can't leave game area
+					if players[playerNr].x<2 then
+					 players[playerNr].x=2
+					elseif players[playerNr].x>230 then
+					 players[playerNr].x=230
+					end
+					if players[playerNr].y<2 then
+					 players[playerNr].y=2
+					elseif players[playerNr].y>126 then
+					 players[playerNr].y=126
+					end
+				end
+			end
+			
+			-- WIP: Collision of both players.
+			-- Still requires collision detection.
+			-- I will complete this in a future version.
+			--[[
+			-- Collision of both players
+			if players[1].alive and players[2].alive then
+			 if collision then
+				 sfx(3,"C-3",32,1,15,0)
+				 for playerNr=1,2 do
+					 players[playerNr].alive=false
+						players[playerNr].score=players[playerNr].score+1
+					end
+				end
+			end--]]
+			
+			-- Handle Shots
+			for shotNr=0,#shots do
+			 if shots[shotNr].alive then
+				 -- Movement
+					shots[shotNr].x=shots[shotNr].x+shots[shotNr].spdX
+					shots[shotNr].y=shots[shotNr].y+shots[shotNr].spdY
+					
+					-- Wall Collisions
+					myBase=mapData[gameMap.index].shotCollisionBase
+				 if mget(((shots[shotNr].x)/8)+(gameMap.x),((shots[shotNr].y)/8)+(gameMap.y))>=myBase then
+					 shots[shotNr].alive=false
+					end
+					
+					-- Game Area Restrictions
+					if (shots[shotNr].x<2) or (shots[shotNr].y<2) or (shots[shotNr].x>238) or (shots[shotNr].y>134) then
+					 shots[shotNr].alive=false
+				 end
+					
+					-- Player Interaction
+					playerNr=0
+					if shots[shotNr].player==1 then
+					 playerNr=2
+					else
+					 playerNr=1
+					end
+					if players[playerNr].alive then
+						if (shots[shotNr].x>=players[playerNr].x) and (shots[shotNr].y>=players[playerNr].y) and (shots[shotNr].x<=players[playerNr].x+7) and (shots[shotNr].y<=players[playerNr].y+7) then
+						 --trace(t..": HIT")
+							if soundOn then
+							 sfx(3,"C-3",32,1,15,0)
+							end
+							players[playerNr].alive=false
+							shots[shotNr].alive=false
+							players[shots[shotNr].player].score=players[shots[shotNr].player].score+1
+						end
+					end
+				end
+			end
+			
+			-- Check if score has reached 10
+			for playerNr=1,2 do
+			 if not(gameOver) then
+			  if players[playerNr].score>=scoreGoal then
+					 gameOver=true
+						music()
+						if soundOn then
+						 music(1,-1,-1,false)
+						end
+					end
+				end
+			end
+		end
+		
+		-- RENDER SECTION
+		Background(mapData[gameMap.index].background)
+		cls(mapData[gameMap.index].background)
+		map(gameMap.x,gameMap.y,30,17,0,0,-1,1,nil)
+		for shotNr=0,#shots do
+		 if shots[shotNr].alive then
+			 color=0
+			 if shots[shotNr].player==1 then
+				 color=13
+				elseif shots[shotNr].player==2 then
+				 color=6
+				end
+			 circ(shots[shotNr].x,shots[shotNr].y,1,color)
+			end
+		end
+		for playerNr=1,2 do
+		 if players[playerNr].alive then
+		  spr(players[playerNr].sprite+players[playerNr].spriteChange+players[playerNr].spriteChangeDir,players[playerNr].x,players[playerNr].y,15,1,0,0,1,1)
+			else
+				if players[playerNr].destructStep<=maxDestructStep then
+				 spr(263+(players[playerNr].destructStep*2),players[playerNr].x-4,players[playerNr].y-8,15,1,0,0,2,2)
+					players[playerNr].tDestruct=players[playerNr].tDestruct+1
+					if players[playerNr].tDestruct>destructSpeed then
+					 players[playerNr].tDestruct=0
+						players[playerNr].destructStep=players[playerNr].destructStep+1
+					end
+				else
+				 if not(gameOver) then
+			   ResetPlayerSoft(playerNr)
+					end
+				end
+			end
+		end
+		printCenter(players[1].score..":"..players[2].score,120,2,mapData[gameMap.index].textColor,false,1)
+		if gameOver then
+		 playerNr=0
+			if players[1].score>=scoreGoal then
+			 playerNr=1
+			else
+			 playerNr=2
+			end
+			thisColor=0
+			if gameOverSwitch then
+			 if playerNr==1 then
+			  thisColor=2
+				else
+				 thisColor=6
+				end
+			else
+			 thisColor=mapData[gameMap.index].textColor
+			end
+		 print("PLAYER "..playerNr.." WON!",51,62,thisColor,false,2)
+			t_gameOver=t_gameOver+1
+			if t_gameOver>maxGameOverTime then
+			 ResetHard()
+			elseif t_gameOver%10==0 then
+			 gameOverSwitch=not(gameOverSwitch)
+			end
+		end
+		
+		-- TIME STEP INCREMENTING
+		t=t+1
+		for playerNr=1,2 do
+		 players[playerNr].t_dirChange=players[playerNr].t_dirChange+1
+			players[playerNr].tShot=players[playerNr].tShot+1
+		end
+	elseif mode==2 then
+	 exit()
+	else
+	 mode=0
+	end
+end
+
+-- <TILES>
+-- 000:57b55b5555b5555bb555b75b5b555555b7555555b55555bb5b55bb5b55755b57
+-- 001:11111111111111117777777777757775b7575757b575557b7b55bb5b55755b57
+-- 002:57bb77115b57771175757711555757115b557711bb577711557577117bb75711
+-- 003:75b55755b5bb55b7b755575b7575757b57775777777777771111111111111111
+-- 004:11757bb711775755117775bb117755b51175755511775757117775b51177bb75
+-- 005:11111111111111111177777711757775117757571177757b1177b75b11755b7b
+-- 006:111111111111111177777711577757115b757711b757771175757711bbb75711
+-- 007:11757bbb117757571177757b117757b511757775117777771111111111111111
+-- 008:b7b55711b57b7711b75777117575771157775711777777111111111111111111
+-- 009:57b55b5555b5555bb555b75b5b533555b5377355b55555bb5b55bb5b55755b57
+-- 010:4444444499999999444444449999999944444444999999994444444499999999
+-- 011:8882228888888888888888888888888882228888888888888888222888888888
+-- 012:11111111221111228821122888811228822112888881128888d11d28888dd888
+-- 013:1111111111111111111111111111111111111111111111111111111111111111
+-- 014:1111111111444411141441411441144114411441141441411144441111111111
+-- 032:eee4eeeeeeeeeeeeeeeeee4e4eeeeeeeeeeeeeeeeee4eeeeeeeeeeeee4eeee4e
+-- 033:111111111111111144444444444e444ee4e4e4e4ee4eee4e4eeeeeeeeeeee4ee
+-- 034:e4ee4411eee44411ee4e4411eee4e411eeee44114ee44411ee4e4411eee4e411
+-- 035:ee4eeeeeeeeeeee4e4eee4ee4e4e4e4ee444e444444444441111111111111111
+-- 036:114e4eee1144e4ee11444ee41144eeee114e4eee1144e4ee11444eee1144ee4e
+-- 037:111111111111111111444444114e444e1144e4e411444e4e1144e4ee114eee4e
+-- 038:111111111111111144444411e444e411ee4e4411e4e444114e4e4411eee4e411
+-- 039:114e4eee1144e4e411444e4e1144e4ee114e444e114444441111111111111111
+-- 040:e4eee411ee4e4411e4e444114e4e4411e444e411444444111111111111111111
+-- 041:eeeee4eeeeeeeeee4e33eeeee3773e4eeeeeeeeeeee4eeeeeeeeeeeee4eeee4e
+-- 042:1111111111111111111111111111111111111111111111111111111111111111
+-- 043:1111111111444411141441411441144114411441141441411144441111111111
+-- 064:ff7fffffffffff7fffffffffff7fffffffffffff7fffffffffff7ffffffffff7
+-- 065:111111111111111177777777777f777ff7f7f7f7ff7fff7f7ffffffffffff7ff
+-- 066:f7ff7711fff77711ff7f7711fff7f711ffff77117ff77711ff7f7711fff7f711
+-- 067:ff7ffffffffffff7f7fff7ff7f7f7f7ff777f777777777771111111111111111
+-- 068:117f7fff1177f7ff11777ff71177ffff117f7fff1177f7ff11777fff1177ff7f
+-- 069:111111111111111111777777117f777f1177f7f711777f7f1177f7ff117fff7f
+-- 070:111111111111111177777711f777f711ff7f7711f7f777117f7f7711fff7f711
+-- 071:117f7fff1177f7f711777f7f1177f7ff117f777f117777771111111111111111
+-- 072:f7fff711ff7f7711f7f777117f7f7711f777f711777777111111111111111111
+-- 073:4444444499999999444444449999999944444444999999994444444499999999
+-- 074:9494949494949494949494949494949494949494949494949494949494949494
+-- 075:ff7ffffaffffffa8fffffa88ff7fa8f8fffa88a87fa8f888fa88a228a8888888
+-- 076:af7fffff8affff7f88afffff888affff8222a7ff8ff88aff8aa822af8888888a
+-- 077:8882228f8888887f8f888fff8a88ffff822fffff88ffffff8fff7ffffffffff7
+-- 078:f8822288ff888ff8fff88aa8ff7f8888fffff8887fffff88ffff7ff8fffffff7
+-- 079:8882228888888888888ff888888aa888822288888ff888888aa8222888888888
+-- 080:88888888888f88f88ffff8a88fffa8888aaa88ff88888ffa8ff88aa88aa88888
+-- 081:11111111221111228f2112288ff112288aa112ff888112fa8fd11da88a8dd888
+-- 082:1111111111111111111111111111111111111111111111111111111111111111
+-- 083:1111111111444411141441411441144114411441141441411144441111111111
+-- 096:4144441444444444444141444444444141444444444444444441441414444444
+-- 097:0000000000000000111111111114111441414141441444141444444444444144
+-- 098:4144110044411100441411004441410044441100144111004414110044414100
+-- 099:4414444444444441414441441414141441114111111111110000000000000000
+-- 100:0014144400114144001114410011444400141444001141440011144400114414
+-- 101:0000000000000000001111110014111400114141001114140011414400144414
+-- 102:0000000000000000111111004111410044141100414111001414110044414100
+-- 103:0014144400114141001114140011414400141114001111110000000000000000
+-- 104:4144410044141100414111001414110041114100111111000000000000000000
+-- 105:4144441444444444444141444443344141377344444444444441441414444444
+-- 106:4144441444444444444141444446644141699644444444444441441414444444
+-- 107:4144441444444449444141964444491941449999444966694499999919996919
+-- 108:4144441494444444194141449914444199994444919964446669991491996994
+-- 109:9919996496669944199991449919444199944444914444446441441414444444
+-- 110:4919996944669999444991994444999941444991444444694441441914444444
+-- 111:9919996996669999199991999919999999999991919966696669999991996919
+-- 112:9919996996644999194444499444444491111111999966696669999991996919
+-- 113:1111111111111111111111111111111111111111111111111111111111111111
+-- 114:0000000000333300030330300330033003300330030330300033330000000000
+-- 115:1133aa33a37111a133a3733aa773a31a1a73a31333117aa3a31333137737a11a
+-- 237:57b55b5555b5555bb555b75b5b555555b7555555ba74553b3a5a3334a4343454
+-- 238:aa33aa43734373344a7333334a3a347a3a73433a3433344a5375535373535573
+-- 255:1111111114444441141111411414414114144141141111411444444111111111
+-- </TILES>
+
+-- <SPRITES>
+-- 001:fff00ffffd8233fff8d8200f0288823303288820f302888fff03288ffff30fff
+-- 002:00fd8f00338d8833008d88003388883300888800338888330088880033f88f33
+-- 003:fff00fffff3328dff0028d8f3328882002888230f888203ff88230fffff03fff
+-- 004:fff33ffffd8200fff8d8233f3288820030288823f032888fff30288ffff03fff
+-- 005:33fd8f33008d8800338d88330088880033888833008888003388883300f88f00
+-- 006:fff33fffff0028dff3328d8f0028882332888203f888230ff88203fffff30fff
+-- 007:fffffffffffffffffffffff0fffffff3fffffff1ffffff31fffff303ffff3303
+-- 008:ffffffffffffffff31733fff11330fff333313ff7317130011073f1f73003fff
+-- 009:ffffff30fff00301f3000011f0133077f01077003013300103000331f3731030
+-- 010:300003ff07303030300703103731100000703000170001000007030310710003
+-- 011:f3303073300133303037703100371177000371370013130f03301337f37330f1
+-- 012:3077033f3377100037310103f333100037777731371f07007f30000710300003
+-- 013:fff0fffffff133ff3fffffffffffffffffffff3700ffffff033ffffffffff0f1
+-- 014:3f7703fffff7fffffffffffff33ffff037777ff1f71ffff0ff3ffff7ff3fff03
+-- 016:0000000000000000eeeee0000000000000000000000000000000000000000000
+-- 017:3030303030303030f888888fddd8888888888888f888888f3030303030303030
+-- 018:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+-- 019:0303030303030303f888888f88888ddd88888888f888888f0303030303030303
+-- 020:0303030303030303f888888fddd8888888888888f888888f0303030303030303
+-- 021:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+-- 022:3030303030303030f888888f88888ddd88888888f888888f3030303030303030
+-- 023:f1fff3eeff3730e9ff011e96ff373966ff0fe966ffffee96ffff1ee1ffffffee
+-- 024:ee33ffff91e3ffff69eeffff669effff6691ffff69e1ffff9eefffffeeffffff
+-- 025:ff731103ffff7000ffff3701ffff3001fff07330fff01003f703030300017037
+-- 026:37113fff0303ffff071fffff0001ffff70000fff70100fff7001710f11003000
+-- 027:ff73337fffff7037ffffff01ffffff00ffffff30fffff033fffff00ffff17f73
+-- 028:03313ffff30fffff37ffffff70ffffff10ffffff071fffff3300ffff1f3733ff
+-- 029:ffffff7ffffffffffffffff1fffffff0fffffffffffff0fffffffffffff17fff
+-- 030:ff31ffffff0ffffffffffffffffffffffffffffff71ffffff3ffffffffff3fff
+-- 032:000000000e00000000e00000000e000000000000000000000000000000000000
+-- 033:fff30fffff03288ff302888f0328882002888233f8d8200ffd8233fffff00fff
+-- 034:00f88f0033888833008888003388883300888800338d8833008d880033fd8f33
+-- 035:fff03ffff88230fff888203f0288823033288820f0028d8fff3328dffff00fff
+-- 036:fff03fffff30288ff032888f3028882332888200f8d8233ffd8200fffff33fff
+-- 037:33f88f3300888800338888330088880033888833008d8800338d883300fd8f00
+-- 038:fff30ffff88203fff888230f3288820300288823f3328d8fff0028dffff33fff
+-- 048:00e0000000e0000000e0000000e0000000e00000000000000000000000000000
+-- 049:fff00ffff96133fff696100f0166613303166610f301666fff03166ffff30fff
+-- 050:00f96f0033696633006966003366663300666600336666330066660033f66f33
+-- 051:fff00fffff33169ff001696f3316661001666130f666103ff66130fffff03fff
+-- 052:fff33ffff96100fff696133f3166610030166613f031666fff30166ffff03fff
+-- 053:33f96f3300696600336966330066660033666633006666003366663300f66f00
+-- 054:fff33fffff00169ff331696f0016661331666103f666130ff66103fffff30fff
+-- 064:00000000000e000000e000000e00000000000000000000000000000000000000
+-- 065:3030303030303030f666666f9996666666666666f666666f3030303030303030
+-- 066:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+-- 067:0303030303030303f666666f6666699966666666f666666f0303030303030303
+-- 068:0303030303030303f666666f9996666666666666f666666f0303030303030303
+-- 069:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+-- 070:3030303030303030f666666f6666699966666666f666666f3030303030303030
+-- 081:fff30fffff03166ff301666f0316661001666133f696100ff96133fffff00fff
+-- 082:00f66f0033666633006666003366663300666600336966330069660033f96f33
+-- 083:fff03ffff66130fff666103f0166613033166610f001696fff33169ffff00fff
+-- 084:fff03fffff30166ff031666f3016661331666100f696133ff96100fffff33fff
+-- 085:33f66f3300666600336666330066660033666633006966003369663300f96f00
+-- 086:fff30ffff66103fff666130f3166610300166613f331696fff00169ffff33fff
+-- 160:0033333303373737003333330001033700010033000010370000103300000137
+-- 161:3333330073737330333333007330100033001000730100003301000073100000
+-- 162:0373733733333333377330013333000137730001333300013773303333333337
+-- 163:3373730033333330003377300003333000037730000333303033773033333330
+-- 164:0330000033330000373330003333330037303331333003333730003333300003
+-- 165:0000030000003330000037300000333011113730000033303000373033003330
+-- 166:0330000033330000377311113333000337730033333303333773337333333330
+-- 167:0033300303333033337300373330003373000037310000330100003701000033
+-- 168:3333333337373737333333333000001030000010300000103333333337373737
+-- 169:3000000033000000300000000000000000000000000000003000000033000000
+-- 176:0000013300000037000000330000003700000033000000370000003300000003
+-- 177:3310000073000000330000007300000033000000730000003300000030000000
+-- 178:3333333737733033333300003773000033331111377300003333000003300000
+-- 179:3333333030337730000333300003773011133330000377300003333000003300
+-- 180:3330000037300000333111113730000033300000373000003330000003000000
+-- 181:3330333003333730113333300003373000003330000037300000333000000300
+-- 182:3333333037733373333303333773003333330003377311113333000003300000
+-- 183:0100000301000000310000007300000033300000337300030333303300333003
+-- 184:3333333300010003000100030001000300010003333333337373737333333333
+-- 185:3300000073000000330000007300000033000000730000003300000030000000
+-- 192:000000000000000000000000000000000000000000000000000000000fffffff
+-- 193:00000000000000000000000000000000000000000000000000000000fffffff0
+-- 194:000000000000000000000000000000000000000000000000000000000fffffff
+-- 195:00000000000000000000000000000000000000000000000000000000ffffff00
+-- 196:00000000000000000000000000000000000000000000000000000000ffff0000
+-- 197:000000000000000000000000000000000000000000000000000000000000fff0
+-- 198:00000000000000000000000000000000000000000000000000000000ffff0000
+-- 199:000000000000000000000000000000000000000000000000000000000fffffff
+-- 200:00000000000000000000000000000000000000000000000000000000ffffffff
+-- 201:00000000000000000000000000000000000000000000000000000000ff000000
+-- 208:ff333333f3373737ff3333330ff1f33700f1ff3300ff1f37000f1f33000ff137
+-- 209:333333ff7373733f333333ff733f1fff33ff1f0f73f1ff0f33f1f00f731ff00f
+-- 210:ff333333f33737373333333337733ff13333fff13773fff133333f3337733337
+-- 211:33333fff373733ff3333333fff33773ffff3333ffff3773f3f33333f3333773f
+-- 212:f33ff0003333ff0037333ff0333333ff373f3331333ff333373fff33333f0ff3
+-- 213:000ff3ff000f333f000f373fffff333f1111373fffff333f3fff373f33ff333f
+-- 214:f33ff0003333ffff377311113333fff33773ff333333f333377333733333333f
+-- 215:ff333ff3f3333f333373ff37333fff3373ff0f3731f00f33f1f00f37f1f00f33
+-- 216:3333333337373737333333333fffff1f3f000f1f3fffff1f3333333337373737
+-- 217:3ff0000033f000003ff00000ff00000000000000ff0000003ff0000033f00000
+-- 224:0000f1330000ff3700000f3300000f3700000f3300000f3700000f3300000ff3
+-- 225:331f000f73ff000f33f0000f73f0000f33f0000f73f0000f33f0000f3ff0000f
+-- 226:3333333737733f333333ffff3773ffff333311113773ffff3333f000f33ff000
+-- 227:3333333f3f33773ffff3333ffff3773f1113333ffff3773f00f3333f00ff33ff
+-- 228:333f00ff373fffff33311111373fffff333f0000373f0000333f0000f3ff0000
+-- 229:333f333ff333373f1133333ffff3373f00ff333f000f373f000f333f000ff3ff
+-- 230:3333333f377333733333f3333773ff333333fff3377311113333fffff33ff000
+-- 231:f1f00ff3f1f000ff31f0000073ff0000333ff0ff3373fff3f3333f33ff333ff3
+-- 232:33333333fff1fff300f1f0f300f1f0f3fff1fff3333333337373737333333333
+-- 233:33f0000073f0000033f0000073f0000033f0000073f0000033f000003ff00000
+-- 240:000000ff00000000000000000000000000000000000000000000000000000000
+-- 241:ff00000000000000000000000000000000000000000000000000000000000000
+-- 242:ffff000000000000000000000000000000000000000000000000000000000000
+-- 243:000ffff000000000000000000000000000000000000000000000000000000000
+-- 244:fff0000000000000000000000000000000000000000000000000000000000000
+-- 245:0000fff000000000000000000000000000000000000000000000000000000000
+-- 246:ffff000000000000000000000000000000000000000000000000000000000000
+-- 247:0fffffff00000000000000000000000000000000000000000000000000000000
+-- 248:ffffffff00000000000000000000000000000000000000000000000000000000
+-- 249:ff00000000000000000000000000000000000000000000000000000000000000
+-- </SPRITES>
+
+-- <MAP>
+-- 000:5010101010101010101010e0101010101010e010101010101010101010605212121212a212121212121212121212b212121212121212a2121212126250101010101010101010e0101010b0b01010101010101010101010101060541414143514141414141414141414141405f40505141414141414141464f6f6f6f6f607f61616161616161616161616161616161616161616161666501010101010101010101010101010101010101010101010101010101060501010101010101010101010101010101010101010101010101010101060501010101010101010101010101010101010101010101010101010101060
+-- 001:4000000000000000000000e0000000000000e000000090000000000090204202020202a202020202020202020202b202020202020202a2020292022240000000000000900000e0000000b0b0000000000090000000000000002044040404350404040404040404040404040505f4f4c40404040404040424f6f6f6f6f6f6d60606a60606060606060606060606060606060606060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 002:4090000000d00090000000e0000000000000e00000000000d000000000204202020202a202020202020202020202b202020292020202a202020202224000000000d000000000e0000000b0b00000000000000000d0000090002044040404350404040404043535040404b4f40505f4f4c404040404040424f607f6f6f6d6060606062706060606060606060606a60606060696060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 003:4000000000d0000000000000000090000000000000000000d000000000204292020202a2020202020202020202020202020202020202a202020202224000000000d00000000000000000a0a00000000000000000d00000000020440404043504040404040435350404049494949494949494040404040424460606060606060606962706060606060606272727060606060606060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 004:4000000000d0000000000000000000000000000000000000d000000000204202020202a2020202020202020202020202020202020202a202020202224090000000d09000000000000000a0a00090000000000000d00000000020440404040404040404040435350404049494949494949494040404040424460696060606060606062706060606060606060606060606060606060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 005:4000000000d00000e0e000000000000000000000e0e00000d000000000204202020202a2020202020202020202020202020202020202a2b2b2b202224000000000d00000000000900000c0c00000000000000000d0000000002044040404040404040404040404040404151515151515151504040404042446060606060606060606060606060696a606060606060606060606060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 006:4000000000d0000000000000000000000000000000000000d000000000204202020202a2020202b202029202020202020202b2020202a202020202224000000000d00000000000000000b0b000e0000000000000d0000000002044040404040404040404040404040404050505f40505f405c404040404244606060606060606060606b6f6f6f6c60606060696060606060606a60626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 007:4000000000d000009000000000e0e0e0e000009000000000d00090000020420202020202020202b202020202020202020202b20202020202020202224000000000d00000000000000000b0b000e0000000000000d00000900020440404043504040404040404040404b405f4f405f4050505f435040404244606060627060606a60606f6f6f6f6f60606060606060606062706060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 008:4000000000d0000000000000009000000000000000000000d00000000020420202020202020202b202020202b2b2b2020202b20202020202020292224000000000d0e0e0e00000000000b0b00000000000e0e0e0d0000000002044040404350404b4f405c4a4a404b40505f40505f4f405f40535040404244606060627960606060606f6f6f6f6d60606060606060606062706060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 009:4000000090d0000000000000000000000000000000000000d00000000020420202020202020202b202020202020202020202b20202020202020202224000009000d0000000000000e000b0b09000000000000000d00000000020440404043504b40505f405a4a4f4050505f405f40505f4050535040404244606060627060606060696e6f6f6d6060696060606060606062706069626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 010:4000000000d0d0d0d0d0d0d0d000000090d0d0d0d0d0d0d0d000000000204202020202a2020202b202020202020202029202b2020202a202020202224000000000d0009000000000e000b0b00000000000000000d000000000204404040435b405f405f405a4a40505f405050505f405f405f435040404244606a6062706060606060606060606060606062706060606a62706060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 011:4000000000d0000000000000000000000000000000000000d000000000204202b2b2b2a2020202020202020202020202020202020202a202020202224000000000d00000000000000000b0b00000000090000000d0900000002044040404b40505f4f405f4a4a4050505f405d40404040435040404040424460606060606060606060606060606060606062706060696060606060626400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 012:4000900000d0000000000000000000000000000000900000d000000000204202020202a2020202020202020202020202020202020202a202020202224000000000d00000000000000000a0a00000000000000000d0000000002044040404e405f4f405f405a4a4d40404040404040404043504040404042446060606060606a627272706060606060606a6270606060606060606b6f6400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 013:4000000000d0009000000000000000000000000000000000d000000000204202020202a2020202920202020202020202020202020202a202020202224000000000d00000000000000000a0a00000000000000000d000000000204404040404e40505f405d4040404040404040404040404350404040404244606069606060606060606069606060606060627060606060606b6f6f6f6400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 014:4000000000d000000000e00000000000000000e000000000d000000000204202020292a20202020202020202b2020202020202020202a202029202224000000000d00000009000000000c0c0000000e000000000d0000000002044040404040404040404040404040404040404040404040404040404042446060606060606060606060606060606060606060606a606b6f6f6f607f6400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 015:40000090000000000000e00000000090000000e0000000000000000090204202020202a20202020202020202b2020202020202029202a202020202224090000000000000000000009000b0b0000000e0000000000000000090204404040404040404040404040404043504040404040404040404040404244606060606060606a606060606060606060606069606b6f6f6f6f6f6f6f6400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020400000000000000000000000000000000000000000000000000000000020
+-- 016:70303030303030303030e03030303030303030e0303030303030303030807232323232a23232323232323232b2323232323232323232a232323232827030303030303030303030303030b0b0303030e03030303030303030308074343434343434343434343434343435343434343434343434343434348476363636363636363636363636363636363636363636f6f6f607f6f6f6f6703030303030303030303030303030303030303030303030303030303080703030303030303030303030303030303030303030303030303030303080703030303030303030303030303030303030303030303030303030303080
+-- </MAP>
+
+-- <WAVES>
+-- 000:00000000ffffffff00000000ffffffff
+-- 001:0123456789abcdeffedcba9876543210
+-- 002:0123456789abcdef0123456789abcdef
+-- 003:0000000000000000ffffffffffffffff
+-- 004:259beffeed963102479befffedca8421
+-- </WAVES>
+
+-- <SFX>
+-- 000:030003000300030003000300030003000300030003000300030003000300030003000300030003000300030003000300030003000300030003000300307000000000
+-- 001:0f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f00004000000000
+-- 002:040004000400040004000400040004000400040004000400040004000400040004000400040004000400040004000400040004000400040004000400300000000000
+-- 003:0f820f831f631f431f201f201f211f212f312f112f103f203f204f2f4f2f5f2f5f2f6f3f6f2e7f2e8f2e8f2d9f2daf1daf1dbf1ccf1ccf1cdf1cff0ca00000000000
+-- 004:0f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f00102000000000
+-- 005:0fa60fb50fb50f941f941f941f842f732f632f623f524f415f315f216f217f108f008f0e9f0eaf0daf0dcf0ddf0def0dff0cff0eff0cff0cff0cff0ca91000000000
+-- </SFX>
+
+-- <PATTERNS>
+-- 000:444112100000444112000000444114100000444114000000444112100000444112000000444110100000444110000000444112100010444112000000444114100000444114000000444112100000444112000000444110100000444110000000444112100000444112000000444114100000444114000000444112100000444112000000444110100000444110000000444112100000444112000000444114100000444114000000444112100000444112000000444110100000444110000000
+-- 001:499104000000799104000000499104000000a99104000000100000100000100000100000100000100000100000100000499104000000799104000000699104000000499104000000100000100000100000100000100000100000100000100000499104000000799104000000499104000000a99104000000499104000000799104000000499104100000a99104000000499104100000799104000000699104100000f99102000000499104000000000000100000100000100000100000100000
+-- 002:4ff1240000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004ff1260000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004ff1240000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004ff126000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+-- 003:1b00001000001000001000001000001000001000001000001b00004ff1060000000000000000001000001000001000001000004ff106000000bff1060000000000000000000000000000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001000001b0000100000100000100000100000100000100000100000100000100000100000100000100000100000100000100000
+-- </PATTERNS>
+
+-- <TRACKS>
+-- 000:000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ce0000
+-- 001:000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000230000
+-- </TRACKS>
+
+-- <SCREEN>
+-- 000:111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111188888888888222888888888888888888111111111111111111111111111111111111111111111111111111111111111111111111
+-- 001:1111111111111111111111111111111111444411111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111888f88f888888888888f88f8888f88f8111111111111111111111111111111111111111111111111111111111111111111111111
+-- 002:11777777777777777777777777777777141441417777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777778ffff8a8888ff8888ffff8a88ffff8a8777777777777777777777777777777777777777777777777777777777777777777777711
+-- 003:117f777f777f777f777f777f777f777f14411441777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f8fffa888888aa8888fffa8888fffa888777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777ff777f711
+-- 004:117700f707f007f7f7f000f7f7f7f7f714411441f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f78aaa88ff822288888aaa88ff8aaa88fff7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7ff7f7711
+-- 005:1177007f0f000f7fff00ff0fff7fff7f14144141ff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7f88888ffa8ff8888888888ffa88888ffaff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7fff7ff7f77711
+-- 006:117700ff0ff00fff7f00ff0f7fffffff114444117fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff8ff88aa88aa822288ff88aa88ff88aa87fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f7f7711
+-- 007:117ff000fff007f00f00f70ffffff7ff11111111fffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ff8aa88888888888888aa888888aa88888fffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff7f711
+-- 008:117f7f0fff0000f00f7000ffff7fffff11111111ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff88888888888888888882228888822288af7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 009:1177f7ffffffff7fffffff7fffffff7f11444411ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f888f88f8888f88f888888888888888888affff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 010:11777ff7ffffffffffffffffffffffff14144141ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8ffff8a88ffff8a8888ff888888ff88888afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 011:1177ffffff7fffffff7fffffff7fffff14411441ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff8fffa8888fffa888888aa888888aa888888affffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 012:117f7fffffffffffffffffffffffffff14411441ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8aaa88ff8aaa88ff82228888822288888222a7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7711
+-- 013:1177f7ff7fffffff7fffffff7fffffff141441417fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff88888ffa88888ffa8ff888888ff888888ff88aff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 014:11777fffffff7fffffff7fffffff7fff11444411ffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff8ff88aa88ff88aa88aa822288aa822288aa822afffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 015:1177ff7ffffffff7fffffff7fffffff711111111fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff78aa888888aa8888888888888888888888888888afffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 016:117f7fffff7fffffff7fffffff7fffff11111111ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff1111111111111111ff7fffffff7fffffff7fffffff7ffffa8882228888888888888888888882228888822288af7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 017:1177f7ffffffff7fffffff7fffffff7f11444411ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f1144441111444411ffffff7fffffff7fffffff7fffffffa888888888888f88f8888f88f888888888888888888affff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 018:11777ff7ffffffffffffffffffffffff14144141ffffffffffffffffffffffffffffffffffffffffffffffff1414414114144141fffffffffffffffffffffffffffffa88888ff8888ffff8a88ffff8a8888ff888888ff88888afffffffffffffffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 019:1177ffffff7fffffff7fffffff7fffff14411441ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff1441144114411441ff7fffffff7fffffff7fffffff7fa8f8888aa8888fffa8888fffa888888aa888888aa888888affffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 020:117f7fffffffffffffffffffffffffff14411441ffffffffffffffffffffffffffffffffffffffffffffffff1441144114411441fffffffffffffffffffffffffffa88a8822288888aaa88ff8aaa88ff82228888822288888222a7ffffffffffffffffffffffffffffffffffffffffffffffffffffff7711
+-- 021:1177f7ff7fffffff7fffffff7fffffff141441417fffffff7fffffff7fffffff7fffffff7fffffff7fffffff14144141141441417fffffff7fffffff7fffffff7fa8f8888ff8888888888ffa88888ffa8ff888888ff888888ff88aff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 022:11777fffffff7fffffff7fffffff7fff11444411ffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff1144441111444411ffff7fffffff7fffffff7ffffa88a2288aa822288ff88aa88ff88aa88aa822288aa822288aa822afffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 023:1177ff7ffffffff7fffffff7fffffff711111111fffffff7fffffff7fffffff7fffffff7fffffff7fffffff71111111111111111fffffff7fffffff7fffffff7a8888888888888888aa888888aa8888888888888888888888888888afffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 024:117f7fffff7fffffff7fffffff7fffff11111111ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff1111111111111111ff7fffffff7fffffff7fffff4444444444444444444444444444444444444444444444444444444444444444ff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 025:1177f7ffffffff7fffffff7fffffff7f11444411ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f1144441111444411ffffff7fffffff7fffffff7f9999999999999999999999999999999999999999999999999999999999999999ffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 026:11777ff7ffffffffffffffffffffffff14144141ffffffffffffffffffffffffffffffffffffffffffffffff1414414114144141ffffffffffffffffffffffff4444444444444444444444444444444444444444444444444444444444444444ffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 027:1177ffffff7fffffff7fffffff7fffff14411441ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff1441144114411441ff7fffffff7fffffff7fffff9999999999999999999999999999999999999999999999999999999999999999ff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 028:117f7fffffffffffffffffffffffffff14411441ffffffffffffffffffffffffffffffffffffffffffffffff1441144114411441ffffffffffffffffffffffff4444444444444444444444444444444444444444444444444444444444444444ffffffffffffffffffffffffffffffffffffffffffff7711
+-- 029:1177f7ff7fffffff7fffffff7fffffff141441417fffffff7fffffff7fffffff7fffffff7fffffff7fffffff14144141141441417fffffff7fffffff7fffffff99999999999999999999999999999999999999999999999999999999999999997fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 030:11777fffffff7fffffff7fffffff7fff11444411ffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff1144441111444411ffff7fffffff7fffffff7fff4444444444444444444444444444444444444444444444444444444444444444ffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 031:1177ff7ffffffff7fffffff7fffffff711111111fffffff7fffffff7fffffff7fffffff7fffffff7fffffff71111111111111111fffffff7fffffff7fffffff79999999999999999999999999999999999999999999999999999999999999999fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 032:117f7fffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff1111111111111111ff7fffffff7fffffff7fffff4444444444444444444444444444444444444444444444444444444444444444ff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 033:1177f7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f1144441111444411ffffff7fffffff7fffffff7f9999999999999999999999999999999999999999999999999999999999999999ffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 034:11777ff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1414414114144141ffffffffffffffffffffffff4444444444444444444444444444444444444444444444444444444444444444ffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 035:1177ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffffffffffff41ffffffffffffff7fffffff7fffffff9ffff99999fffffffffffffffff99999999999999999999999999999999999ff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 036:117f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff333333333333ffff33333333333ffff33ffffffffff3fff33ff444ff333ff3333333333ff4444444444444444444444444444444444ffffffffffffffffffffffffffffffffffffffffffff7711
+-- 037:1177f7ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff33737377373733ff3373737373733ff3333ffffffff333f3333fffff3333f333737373733f99999999999999999999999999999999997fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 038:11777fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffffff333333333333ff333333333333333f37333ffff7ff373f377311113373ff37333333333ff4444444444444444444444444444444444ffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 039:1177ff7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffff1f337733f1fff37733ff1ff33773f333333ffffff333f3333fff3333fff333fffff1fff99999999999999999999999999999999999fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 040:117f7fffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff1ff3333ff1fff3333fff1fff3333f373f33311111373f3773ff3373ff1f373f111f1f1111111111111111111111111111111111111ff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 041:1177f7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffffff1f3773f1ffff3773fff1fff3773f333ff333ffff333f3333f33331f22f333fffff1fff12222111122221111222211112222111122ffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 042:11777ff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1f3333f1ffff33333f333f33333f373fff333fff373f37733373f1f28f37333333333ff288f2112288f2112288f2112288f211228ffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 043:1177ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff137731fffff377333373333773f333ffff333ff333f3333333ff1f28f333737373733f288ff112288ff112288ff112288ff11228ff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 044:117f7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff133331fffff333333373333333f333fffff333f333f3333333ff1fffff33333333333fff8aa112ff8aa112ff8aa112ff8aa112ffffffffffffffffffffffffffffffffffffffffffffff7711
+-- 045:1177f7ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffffff3773fff7ff37733f333f33773f373ffffff333373f37733373f1ffa8fffff1fff373ffa888112fa888112fa888112fa888112fa7fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 046:11777fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffff3333ffffff3333fffffff3333f333111111133333f3333f33331fa88fd11f1f8f333fa88fd11da88fd11da88fd11da88fd11da8ffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 047:1177ff7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f3773ff7fff3773fffffff3773f373ffffffff3373f3773ff3373ff88a8ddf1f8f373f888a8dd8888a8dd8888a8dd8888a8dd888fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 048:117f7fffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffff3333ffffff333311111113333f333ffff7ffff333f3333fff3333ff8fffff1fff333f8888888888888888888882228888888888af7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 049:1177f7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ff3773f7ffff3773fffffff3773f373fffffffff373f377311113373fff33333333373f88888f88f8888f88f888888888888f88f88affff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 050:11777ff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3333ffffff3333fffffff3333f333fffffffff333f3333fffff3333f337373737333f888ffff8a88ffff8a8888ff8888ffff8a888afffffffffffffffffffffffffffffffffffffff7f7711
+-- 051:1177ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff33ffffffff33ffff7ffff33fff3fffff7fffff3fff33ff8ffff333ff3333333333ff888fffa8888fffa888888aa8888fffa888888affffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 052:117f7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffafffff8aaafffffffffffffffff8888aaa88ff8aaa88ff822288888aaa88ff8222a7ffffffffffffffffffffffffffffffffffffff7711
+-- 053:1177f7ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff88888ffa88888ffa88888ffa8ff8888888888ffa88888ffa8ff8888888888ffa8ff88aff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 054:11777fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff8ff88aa88ff88aa88ff88aa88aa822288ff88aa88ff88aa88aa822288ff88aa88aa822afffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 055:1177ff7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ff11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111188aa88888888888888aa888888888888afffffff7fffffff7fffffff7fffffff7fff7f711
+-- 056:117f7fffff7fffffff7fffffff7fffff11111111ff7fffffff7fffffff7fffffff7fffffff14444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444188888888888888888888888888882228811111111ff7fffffff7fffffff7ffffff7ff7711
+-- 057:1177f7ffffffff7fffffff7fffffff7f11444411ffffff7fffffff7fffffff7fffffff7fff1444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444418888f88f8888f88f8888f88f88888888811444411ffffff7fffffff7fffffff7ffff77711
+-- 058:11777ff7ffffffffffffffffffffffff14144141ffffffffffffffffffffffffffffffffff14444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444188ffff8a88ffff8a88ffff8a8888ff88814144141ffffffffffffffffffffffffff7f7711
+-- 059:1177ffffff7fffffff7fffffff7fffff14411441ff7fffffff7fffffff7fffffff7fffffff14444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444188fffa8888fffa8888fffa888888aa88814411441ff7fffffff7fffffff7ffffffff7f711
+-- 060:117f7fffffffffffffffffffffffffff14411441ffffffffffffffffffffffffffffffffff14444444ffff44ff4444444444444444ff44444444ff444ff444444444444444ffff444444444444444444444444188aaa88ff8aaa88ff8aaa88ff8222888814411441ffffffffffffffffffffffffffff7711
+-- 061:1177f7ff7fffffff7fffffff7fffffff141441417fffffff7fffffff7fffffff7fffffff7f1444444fff444fffff44ffff4ffff44fffff44444fffff4ffff444fff444444ff44444ffff4ff4f444fff44444441888888ffa88888ffa88888ffa8ff88888141441417fffffff7fffffff7fffffff7ff77711
+-- 062:11777fffffff7fffffff7fffffff7fff11444411ffff7fffffff7fffffff7fffffff7fffff14444444fff444ff444f44ff4ff44f44ff44444444ff444ff44f4ff4ff44444ff4ff4f44ff4fffff4ff4ff444444188ff88aa88ff88aa88ff88aa88aa8222811444411ffff7fffffff7fffffff7fffff7f7711
+-- 063:1177ff7ffffffff7fffffff7fffffff711111111fffffff7fffffff7fffffff7fffffff7ff144444444fff44ff444f44ff4ff44444ff44444444ff444ff44f4fff4444444ff44f4f44ff4f4f4f4fff44444444188aa888888aa888888aa888888888888811111111fffffff7fffffff7fffffff7fff7f711
+-- 064:117f7fffff7fffffff7fffffff7fffff11111111ff7fffffff7fffffff7ffffa88822288881444444ffff4444fff44ffff4ff444444fff4444444fff4ff44f44fff4444444ffff44ffff4f4f4f44fff4444444188882228888888888888222888888888811111111ff7fffffff7fffffff7ffffff7ff7711
+-- 065:1177f7ffffffff7fffffff7fffffff7f11444411ffffff7fffffff7fffffffa88888888888144444444444444444444444444444444444444444444444444444444444444444444444444444444444444444441888888888888f88f888888888888f88f811444411ffffff7fffffff7fffffff7ffff77711
+-- 066:11777ff7ffffffffffffffffffffffff14144141fffffffffffffffffffffa88888ff8888f1444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444418888ff8888ffff8a8888ff8888ffff8a814144141ffffffffffffffffffffffffff7f7711
+-- 067:1177ffffff7fffffff7fffffff7fffff14411441ff7fffffff7fffffff7fa8f8888aa8888f1444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444418888aa8888fffa888888aa8888fffa88814411441ff7fffffff7fffffff7ffffffff7f711
+-- 068:117f7fffffffffffffffffffffffffff14411441fffffffffffffffffffa88a8822288888a1444446666444444466444444444444444466444444444444444446646644444444444444444464446644644444418822288888aaa88ff822288888aaa88ff14411441ffffffffffffffffffffffffffff7711
+-- 069:1177f7ff7fffffff7fffffff7fffffff141441417fffffff7fffffff7fa8f8888ff888888814444666444466644664444666444666646666644444466664444466666446666466664444446444666444644444188ff8888888888ffa8ff8888888888ffa141441417fffffff7fffffff7fffffff7ff77711
+-- 070:11777fffffff7fffffff7fffffff7fff11444411ffff7fffffff7ffffa88a2288aa822288f14444466644664664664446646646664444664444444644664444466666464466466446444446446646444644444188aa822288ff88aa88aa822288ff88aa811444411ffff7fffffff7fffffff7fffff7f7711
+-- 071:1177ff7ffffffff7fffffff7fffffff711111111fffffff7fffffff7a8888888888888888a1444444666466644466444666444666444466444444464466444446464646446646644644444644666664464444418888888888aa88888888888888aa8888811111111fffffff7fffffff7fffffff7fff7f711
+-- 072:117f7fffff7fffffff7fffffff7fffff11111111ff7fffffff7ffffa88888888888888888814444666644466644466644666444666644466644444466664444464446446666466664444444644446446444444188888888888822288888888888888888811111111ff7fffffff7fffffff7ffffff7ff7711
+-- 073:1177f7ffffffff7fffffff7fffffff7f11444411ffffff7fffffffa8888f88f8888f88f8881444444444444444444444444444444444444444444444444444444444444444446644444444444444444444444418888f88f888888888888f88f8888f88f811444411ffffff7fffffff7fffffff7ffff77711
+-- 074:11777ff7ffffffffffffffffffffffff14144141fffffffffffffa888ffff8a88ffff8a88814444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444188ffff8a8888ff8888ffff8a88ffff8a814144141ffffffffffffffffffffffffff7f7711
+-- 075:1177ffffff7fffffff7fffffff7fffff14411441ff7fffffff7fa8f88fffa8888fffa8888814444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444188fffa888888aa8888fffa8888fffa88814411441ff7fffffff7fffffff7ffffffff7f711
+-- 076:117f7fffffffffffffffffffffffffff14411441fffffffffffa88a88aaa88ff8aaa88ff8214444ffff444444444444444444444444444444ff44444444444444444444ff44444444ff444444ff444fff444441f8aaa88ff822288888aaa88ff8aaa88ff14411441ffffffffffffffffffffffffffff7711
+-- 077:1177f7ff7fffffff7fffffff7fffffff141441417fffffff7fa8f88888888ffa88888ffa8f1444fff4444ffff44fff44ffff444fff444444fffff44fff444444f444f444444ffff44ff44444fff44ff44f44441a88888ffa8ff8888888888ffa88888ffa141441417fffffff7fffffff7fffffff7ff77711
+-- 078:11777fffffff7fffffff7fffffff7fff11444411ffff7ffffa88a2288ff88aa88ff88aa88a14444fff44fff444ff44f4ff44f4ff4ff444444ff444ff44f44444f4f4f4fff44ff44f444444444ff44ff44f4444188ff88aa88aa822288ff88aa88ff88aa811444411ffff7fffffff7fffffff7fffff7f7711
+-- 079:1177ff7ffffffff7fffffff7fffffff711111111fffffff7a88888888aa888888aa8888888144444fff4fff444ff44f4ff4444fff44444444ff444ff44f44444fffff44ff44ff44f4ff444444ff44ff44f4444188aa88888888888888aa888888aa8888811111111fffffff7fffffff7fffffff7fff7f711
+-- 080:117f7fffff7fffffff7fffffff7fffff11111111ff7ffffa888888888882228888888888881444ffff444ffff44fff44ff44444fff44444444fff44fff444444ff4ff4ffff4ff44f4ff44444ffff44fff44444188888888888822288888888888882228811111111ff7fffffff7fffffff7ffffff7ff7711
+-- 081:1177f7ffffffff7fffffff7fffffff7f11444411ffffffa8888f88f888888888888f88f8881444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444418888f88f888888888888f88f88888888811444411ffffff7fffffff7fffffff7ffff77711
+-- 082:11777ff7ffffffffffffffffffffffff14144141fffffa888ffff8a8888ff8888ffff8a88814444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444188ffff8a8888ff8888ffff8a8888ff88814144141ffffffffffffffffffffffffff7f7711
+-- 083:1177ffffff7fffffff7fffffff7fffff14411441ff7fa8f88fffa888888aa8888fffa8888814444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444188fffa888888aa8888fffa888888aa88814411441ff7fffffff7fffffff7ffffffff7f711
+-- 084:117f7fffffffffffffffffffffffffff14411441fffa88a88aaa88ff822288888aaa88ff82144444444fffff44444444ff444ff44444444ff4444444444444ffff4ffff44fff4444444fff444fff4444444444188aaa88ff822288888aaa88ff8222888814411441ffffffffffffffffffffffffffff7711
+-- 085:1177f7ff7fffffff7fffffff7fffffff141441417fa8f88888888ffa8ff8888888888ffa8f144444444ff4444ff4ff444444fffff44444fffff44fff4444444ff444ff44ff44f44444ff44f4ff44f4444444441888888ffa8ff8888888888ffa8ff88888141441417fffffff7fffffff7fffffff7ff77711
+-- 086:11777fffffff7fffffff7fffffff7fff11444411fa88a2288ff88aa88aa822288ff88aa88a144444444ffff444fff44fff444ff44444444ff444ff44f444444ff444ff44ff4444fff44fff44ff44f444444444188ff88aa88aa822288ff88aa88aa8222811444411ffff7fffffff7fffffff7fffff7f7711
+-- 087:1177ff7ffffffff7fffffff7fffffff711111111a88888888aa88888888888888aa8888888144444444ff44444fff444ff444ff44444444ff444ff44f444444ff444ff44ff44f44444ff44f4ff44f444444444188aa88888888888888aa888888888888811111111fffffff7fffffff7fffffff7fff7f711
+-- 088:117f7fffff7fffffff7fffffff7fffffff7ffffa8888888888888888888222888882228888144444444fffff4ff4ff4ffff444fff4444444fff44fff4444444ff44ffff44fff4444444fff444fff44444444441fff7fffffff7fffff11111111ff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 089:1177f7ffffffff7fffffff7fffffff7fffffffa8888f88f8888f88f8888888888888888888144444444444444444444444444444444444444444444444444444444444444444444444444444444444444444441fffffff7fffffff7f11444411ffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 090:11777ff7fffffffffffffffffffffffffffffa888ffff8a88ffff8a8888ff888888ff8888f144444444444444444444444444444444444444444444444444444444444444444444444444444444444444444441fffffffffffffffff14144141ffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 091:1177ffffff7fffffff7fffffff7fffffff7fa8f88fffa8888fffa888888aa888888aa8888f144444444444444444444444444444444444444444444444444444444444444444444444444444444444444444441fff7fffffff7fffff14411441ff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 092:117f7ffffffffffffffffffffffffffffffa88a88aaa88ff8aaa88ff82228888822288888a144444444444444444444444444444444444444444444444444444444444444444444444444444444444444444441fffffffffffffffff14411441ffffffffffffffffffffffffffffffffffffffffffff7711
+-- 093:1177f7ff7fffffff7fffffff7fffffff7fa8f88888888ffa88888ffa8ff888888ff8888888111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111f7fffffff7fffffff141441417fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 094:11777fffffff7fffffff7fffffff7ffffa88a2288ff88aa88ff88aa88aa822288aa822288ff88aa88aa8222894949494949494948ff88aa88ff88aa88ff88aa88aa822288ff88aa88fff7fffffff7fffffff7fffffff7fffffff7fff11444411ffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 095:1177ff7ffffffff7fffffff7fffffff7a88888888aa888888aa8888888888888888888888aa888888888888894949494949494948aa888888aa888888aa88888888888888aa88888fffffff7fffffff7fffffff7fffffff7fffffff711111111fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 096:117f7fffff7fffffff7fffffff7ffffff882228888888888888222888882228888888888888222888888888894949494949494948882228fff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff11111111ff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 097:1177f7ffffffff7fffffff7fffffff7fff888ff8888f88f88888888888888888888f88f888888888888f88f894949494949494948888887fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f11444411ffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 098:11777ff7fffffffffffffffffffffffffff88aa88ffff8a8888ff888888ff8888ffff8a8888ff8888ffff8a894949494949494948f888fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14144141ffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 099:1177ffffff7fffffff7fffffff7fffffff7f88888fffa888888aa888888aa8888fffa888888aa8888fffa88894949494949494948a88ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff14411441ff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 100:117f7ffffffffffffffffffffffffffffffff8888aaa88ff82228888822288888aaa88ff822288888aaa88ff9494949494949494822fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14411441ffffffffffffffffffffffffffffffffffffffffffff7711
+-- 101:1177f7ff7fffffff7fffffff7fffffff7fffff8888888ffa8ff888888ff8888888888ffa8ff8888888888ffa949494949494949488ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff141441417fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 102:11777fffffff7fffffff7fffffff7fffffff7ff88ff88aa88aa822288aa822288ff88aa88aa822288ff88aa894949494949494948fff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff11444411ffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 103:1177ff7ffffffff7fffffff7fffffff7fffffff78aa8888888888888888888888aa88888888888888aa888889494949494949494fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff711111111fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 104:117f7fffff7fffffff7fffffff7fffffff7ffffff8822288888888888888888888822288888888888882228fff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff11111111ff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 105:1177f7ffffffff7fffffff7fffffff7fffffff7fff888ff8888f88f8888f88f888888888888f88f88888887fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f11444411ffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 106:11777ff7fffffffffffffffffffffffffffffffffff88aa88ffff8a88ffff8a8888ff8888ffff8a88f888fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14144141ffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 107:1177ffffff7fffffff7fffffff7fffffff7fffffff7f88888fffa8888fffa888888aa8888fffa8888a88ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff14411441ff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 108:117f7ffffffffffffffffffffffffffffffffffffffff8888aaa88ff8aaa88ff822288888aaa88ff822fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14411441ffffffffffffffffffffffffffffffffffffffffffff7711
+-- 109:1177f7ff7fffffff7fffffff7fffffff7fffffff7fffff8888888ffa88888ffa8ff8888888888ffa88ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff141441417fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 110:11777fffffff7fffffff7fffffff7fffffff7fffffff7ff88ff88aa88ff88aa88aa822288ff88aa88fff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff11444411ffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 111:1177ff7ffffffff7fffffff7fffffff7fffffff7fffffff78aa888888aa88888888888888aa88888fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff711111111fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 112:117f7fffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 113:1177f7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff000f7fffffff7fffffff7fffffff7f00ffff7fff00ff7ff00fff7ffff0ff000ff0ff7fff00007ff000ff700ff00000ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 114:11777ff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ff0ff000ff0000ff0ff00f0000ffffffff000ff0000ff00000fffff0ff00ff0ff0ffffffff00f00ff0f000fffff00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 115:1177ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffff00ffff00f70f00ff070ff00f00ff0f0007f0ff00f00ff0ff00fffffff0ff00fff7f0fffff7000ff007f0ff00f7ff00fff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 116:117f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ff0f00ff0f00ff0ff0000f00fffff00ff00000f00ff0ff00fffffff0ff00ff0ff0fffff00ffff00ff0ff00fff00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7711
+-- 117:1177f7ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7f000fff000ff0000fffff00700ffff0000ffff00f00ff0f7f000fff7ff0ff000ff0ffff7f00000f7000ff0000f00fff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 118:11777fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff700fffff000fffff7fffffff7000ffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 119:1177ff7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff7f711
+-- 120:117f7fffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff700ff0ff00ff00ff7f00ffff7fffffff7fffffff0fffffff700fffff7ff00f11110011ff000fffff7ff0ffff700000ff7fffffff7fffffff7fffffff7f00ffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffff7ff7711
+-- 121:1177f7ffffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffff00070ffffff00ff0f007fff00007f0000ff7ff0ff0000ffffff7f0000f00f10444411f00fff0000ff0f7ffff00f7ff0000f7f000ff07f00f0000fff00007fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffff77711
+-- 122:11777ff7fffffffffffffffffffffffffffffffffffffffffffffffffff00000f000ff0000ff00fff0ff00f000ffffffffff00ff0f000ff000fff0000410004100000f00ff0ffffffff0000ff00ff0f00f00f0ff00f00ff0f0ff00ffffffffffffffffffffffffffffffffffffffffffffffffffff7f7711
+-- 123:1177ffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff700f00ff00ff00ff0f00fff07f00fff000ffffff7f00ff0f700ff0007ff00f10410041f00fff00ff7fffffff700ffff00ffff0007ff0ff00700ff0f07f00ffff7fffffff7fffffff7fffffff7fffffff7fffffff7ffffffff7f711
+-- 124:117f7ffffffffffffffffffffffffffffffffffffffffffffffffffffff00ff0f0000f00ff0ff000ff0000f0000fffffffff00ff0f0000ff0000f00f10400001f00fff00fffffffffff00ffff00fffff000fff0000f00ff0ff0000ffffffffffffffffffffffffffffffffffffffffffffffffffffff7711
+-- 125:1177f7ff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff141441417fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7ff77711
+-- 126:11777fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fff11444411ffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffffff7fffff7f7711
+-- 127:1177ff7ffffffff7fffff0000f00ff0700ff0ff7fff00007fffffff7fffffff7fffffff7ffffff00fffffff0000ffff7fff00ff7f00ffff00ffffff711111001ffff00f7fffffff7fffffff7fffffff7fffffff7ff00ff07fffffff7fffffff7fff00ff7fffffff7fffffff00000fff7fffffff7fff7f711
+-- 128:117f7fffff7fffffff7f00ffff000f0f007f0fffff00fffff000ff00007ff000ff0000fff0000f00ff7ffff00f70f0ff0070000ff00fffffff7f000011111001ff7ffffff0000ff0007f0000ff70000ff000ffffff00ff0ff000ff00007ff0000f7fffff000ff0000f7fffffff00ffffff7ffffff7fff711
+-- 129:1177f7f7fffffff7ffff00f00f00000700ff0ff7ff00f00700f00f00ff0f00f00f00ff070ff00f00fffffff00ff0f0f700f00ff0f00fff000ff000f711444001fff000f7000fff00f00f00f70f000ff700f00ff7ff00ff0700f00f00ff0f0007ff000ff00ff0f007f0fffff7f00ffff7fffffff7ff7f7711
+-- 130:11777f7ff7fff7fff7ff00ff0700f00f00ff07fff700f70f000ff700f70f000ff700f7ff07f00700f7fff7f0000ff0ff00f007f0f00ff7f007f000ff14144001f7ff00ff000ff70007ff00ff07ff000f000ff7fff7f000ff000ff700f7fff70007f007f007f0f00ff0fff7f0f700f7fff7fff7fff7f77711
+-- 131:1177f7ff7f7f7f7f7f7f70000f007f0f70007f7f7f70000f70007f007f0f70007f007f7f70000f70007f7f700f7f7f000070000f7f000f00007f0000144110000070000f70000f70007f007f0f00007f70007f7f7f7f0f7f70007f007f7f00007f00007f000f700f707f7f7f000f7f7f7f7f7f7f7f7f7711
+-- 132:117f777ff777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f77714411441f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f777f711
+-- 133:117777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777141441417777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777711
+-- 134:111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111114444111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+-- 135:111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+-- </SCREEN>
+
+-- <PALETTE>
+-- 000:140c1c44243430346d4e4a4e854c30346524d04648757161597dced27d2c8595a16daa2cd2aa996dc2cadad45edeeed6
+-- </PALETTE>
+
