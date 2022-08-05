@@ -1,5 +1,5 @@
 -- title:  Tanks
--- author: nickifr
+-- author: Nalquas
 -- desc:   A 2-player PvP arcade game about tanks.
 -- script: lua
 -- input:  gamepad
@@ -11,7 +11,7 @@
 
 -- ============LICENSE=============
 -- Tanks - A 2-player PvP arcade game about tanks.
--- Copyright (C) 2017  Niklas 'nickifr' Freund
+-- Copyright (C) 2017  Niklas 'Nalquas' Freund
 --
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by
@@ -71,7 +71,7 @@ players[2]={alive=true,score=0,sprite=321,spriteChangeDir=0,spriteChange=0,x=224
 shots={}
 
 -- Message in Console:
-trace("\n\n-----------------------------\n      nickifr presents:\n        Tanks V"..versionNr.."\n  Last updated: "..releaseDate.."\nhttps://nickifr.itch.io/tanks\n-----------------------------\n")
+trace("\n\n-----------------------------\n      nalquas presents:\n        Tanks V"..versionNr.."\n  Last updated: "..releaseDate.."\nhttps://nalquas.itch.io/tanks\n-----------------------------\n")
 
 function Background(bgrValue)
  poke(0x03FF8, bgrValue) -- Set Background
@@ -239,7 +239,7 @@ function TIC()
 		spr(448,83,28,0,1,0,0,10,4)
 		--print("TANKS", 92, 32, mapData[gameMap.index].textColor, false, 2)
 		printCenter("Copyright (C) 2017", 120, 113, mapData[gameMap.index].textColor, false, 1)
-		printCenter("Niklas 'nickifr' Freund", 120, 120, mapData[gameMap.index].textColor, false, 1)
+		printCenter("Niklas 'Nalquas' Freund", 120, 120, mapData[gameMap.index].textColor, false, 1)
 		printCenter("GNU General Public License Version 3", 120, 127, mapData[gameMap.index].textColor, false, 1)
 		print("V"..versionNr, 4, 4, mapData[gameMap.index].textColor, false, 1)
 		
